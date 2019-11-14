@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from flask import Flask
 import pytest
 
-from ytb_pubsubhubbub.notice_view import YouTubeNoticeView
+from ytb_pubsubhubbub.notice_view import YouTubeNoticeView, IntentValidationHandler
 
 
 @pytest.fixture
@@ -55,45 +55,51 @@ def simulate_intent_verification(client):
     )
 
 
-def test_intent_verification(client):
+def assert_intent_confirmed(resp):
+    assert resp.status_code == 200
+    assert resp.data == b"1234"
 
-    intent_validator = MagicMock(return_value=True)
+
+def assert_intent_rejected(resp):
+    assert resp.status_code == 400
+
+
+def setup_intent_validation_mocker(intent_validation_result):
+    intent_validator = MagicMock(return_value=intent_validation_result)
     subscription_handler = MagicMock()
-    YouTubeNoticeView.set_handler(
-        intent_validator=intent_validator, subscription_handler=subscription_handler
+    intent_validation_handler = IntentValidationHandler(
+        subscription_handler=subscription_handler, intent_validator=intent_validator
     )
+    YouTubeNoticeView.set_handler(intent_validation_handler=intent_validation_handler)
+    return (intent_validator, subscription_handler)
 
-    resp = client.simulate_intent_verification()
 
+def test_intent_verification(client):
+    (intent_validator, subscription_handler) = setup_intent_validation_mocker(True)
+
+    assert_intent_confirmed(client.simulate_intent_verification())
     intent_validator.assert_called_with(channel_id="channel_id", mode="subscribe")
     subscription_handler.assert_called_with(
         channel_id="channel_id", mode="subscribe", lease_seconds=123
     )
 
-    def assert_intent_confirmed():
-        assert resp.status_code == 200
-        assert resp.data == b"1234"
-
-    assert_intent_confirmed()
-
 
 def test_intent_verification_rejected(client):
+    (intent_validator, subscription_handler) = setup_intent_validation_mocker(False)
 
-    intent_validator = MagicMock(return_value=False)
-    subscription_handler = MagicMock()
-    YouTubeNoticeView.set_handler(
-        intent_validator=intent_validator, subscription_handler=subscription_handler
-    )
-
-    resp = client.simulate_intent_verification()
-
+    assert_intent_rejected(client.simulate_intent_verification())
     intent_validator.assert_called_with(channel_id="channel_id", mode="subscribe")
     subscription_handler.assert_not_called()
 
-    def assert_intent_rejected():
-        assert resp.status_code == 400
 
-    assert_intent_rejected()
+def test_no_intent_validator_will_cause_verification_always_pass(client):
+    subscription_handler = MagicMock()
+    intent_validation_handler = IntentValidationHandler(
+        subscription_handler=subscription_handler
+    )
+    YouTubeNoticeView.set_handler(intent_validation_handler=intent_validation_handler)
+
+    assert_intent_confirmed(client.simulate_intent_verification())
 
 
 def test_content_distribution(client):
