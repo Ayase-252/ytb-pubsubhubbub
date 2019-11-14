@@ -1,3 +1,10 @@
 {
-    "python.pythonPath": "venv\\Scripts\\python.exe"
+    "python.pythonPath": "venv\\Scripts\\python.exe",
+    "python.formatting.provider": "black",
+    "python.testing.pytestArgs": [
+        "test"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.testing.pytestEnabled": true
 }
